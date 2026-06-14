@@ -52,6 +52,17 @@ The packages for FP32 and FP16 would have different accuracy and performance on 
 
 ## News
 
+- 2026.06
+  - Upgrade CI and built package to oneAPI 2026.0 (`intel/deep-learning-essentials:2026.0.0-devel-ubuntu24.04`).
+  - oneAPI 2026.0 is an ABI/API-breaking release: rebuild against it; the SYCLcompat library and
+    the DPCT tool are removed (neither is required by the ggml-sycl backend).
+  - On Xe2/Battlemage GPUs the Level Zero **v2** adapter is the default; it accepts in-order
+    command lists only. Set `GGML_SYCL_GRAPH=OFF` if a build/runtime issue is traced to SYCL Graph.
+  - Build JIT (the default, no `-DGGML_SYCL_DEVICE_ARCH`) on Battlemage with the 2026.0 toolkit.
+    AOT for `bmg_g21` (`-DGGML_SYCL_DEVICE_ARCH=bmg_g21`) miscompiles the attention kernels via the
+    offline `ocloc` and yields non-deterministic incoherent output; the runtime IGC the JIT path
+    uses is correct.
+
 - 2026.04-05
   - Optimize mul_mat by reorder feature for data type: Q4_K, Q5_K, Q6_K, Q8_0.
   - Fused MoE.
@@ -281,6 +292,7 @@ Upon a successful installation, SYCL is enabled for the available Intel devices,
 
 |Verified release|
 |-|
+|2026.0.0|
 |2025.3.3 |
 |2025.2.1|
 |2025.1|
@@ -775,7 +787,7 @@ User can use the device management in [docs/multi-gpu.md](https://github.com/ggm
 |--------------------|---------------------------------------|---------------------------------------------|
 | GGML_SYCL          | ON (mandatory)                        | Enable build with SYCL code path.           |
 | GGML_SYCL_TARGET   | INTEL *(default)*                     | Set the SYCL target device type.            |
-| GGML_SYCL_DEVICE_ARCH | Optional                           | Set the SYCL device architecture. Setting the device architecture can improve the performance. See the table [--offload-arch](https://github.com/intel/llvm/blob/sycl/sycl/doc/design/OffloadDesign.md#--offload-arch) for a list of valid architectures. |
+| GGML_SYCL_DEVICE_ARCH | Optional                           | Set the SYCL device architecture (AOT). Setting the device architecture can improve the performance. See the table [--offload-arch](https://github.com/intel/llvm/blob/sycl/sycl/doc/design/OffloadDesign.md#--offload-arch) for a list of valid architectures. **Leave unset on Xe2/Battlemage with oneAPI 2026.0**: AOT `bmg_g21` miscompiles the attention kernels in the offline `ocloc` optimiser and produces non-deterministic incoherent output. Building JIT (the default) uses the runtime IGC, which is correct, at full speed. |
 | GGML_SYCL_F16      | OFF *(default)* \|ON *(optional)*     | Enable FP16 build with SYCL code path. (1.) |
 | GGML_SYCL_GRAPH    | ON *(default)* \|OFF *(Optional)*     | Enable build with [SYCL Graph extension](https://github.com/intel/llvm/blob/sycl/sycl/doc/extensions/experimental/sycl_ext_oneapi_graph.asciidoc). |
 | GGML_SYCL_DNN      | ON *(default)* \|OFF *(Optional)*     | Enable build with oneDNN.                   |

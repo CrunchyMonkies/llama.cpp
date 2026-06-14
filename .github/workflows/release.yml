@@ -1093,11 +1093,11 @@ jobs:
         shell: bash
 
     env:
-      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b60765d1-2b85-4e85-86b6-cb0e9563a699/intel-deep-learning-essentials-2025.3.3.18_offline.exe
+      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/d2148e15-b3c4-4313-afa9-a2373318b0b5/intel-deep-learning-essentials-2026.0.0.613_offline.exe
       WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel:intel.oneapi.win.dnnl:intel.oneapi.win.tbb.devel
       LEVEL_ZERO_SDK_URL: https://github.com/oneapi-src/level-zero/releases/download/v1.28.2/level-zero-win-sdk-1.28.2.zip
       ONEAPI_ROOT: "C:/Program Files (x86)/Intel/oneAPI"
-      ONEAPI_INSTALLER_VERSION: "2025.3.3"
+      ONEAPI_INSTALLER_VERSION: "2026.0.0"
 
     steps:
       - name: Clone
@@ -1168,7 +1168,16 @@ jobs:
             echo "Level Zero loader DLL not found in oneAPI or SDK; relying on system driver/runtime"
           fi
 
-          cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/sycl8.dll" ./build/bin
+          # SYCL runtime DLL soname is versioned (sycl8 on 2025.x, sycl9 on the 2026.0 ABI
+          # break); copy whichever major is present rather than hard-coding it.
+          SYCL_RT_DLL=$(find "${{ env.ONEAPI_ROOT }}/compiler/latest/bin" -maxdepth 1 -iname 'sycl[0-9]*.dll' -print -quit 2>/dev/null || true)
+          if [ -n "$SYCL_RT_DLL" ]; then
+            echo "Using SYCL runtime DLL: $SYCL_RT_DLL"
+            cp "$SYCL_RT_DLL" ./build/bin
+          else
+            echo "ERROR: SYCL runtime DLL (sycl*.dll) not found under compiler/latest/bin" >&2
+            exit 1
+          fi
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/svml_dispmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libmmd.dll" ./build/bin
           cp "${{ env.ONEAPI_ROOT }}/compiler/latest/bin/libiomp5md.dll" ./build/bin
@@ -1209,7 +1218,7 @@ jobs:
 
     env:
       ONEAPI_ROOT: /opt/intel/oneapi/
-      ONEAPI_INSTALLER_VERSION: "2025.3.3"
+      ONEAPI_INSTALLER_VERSION: "2026.0.0"
       LEVEL_ZERO_VERSION: "1.28.2"
       LEVEL_ZERO_UBUNTU_VERSION: "u24.04"
 
@@ -1224,7 +1233,7 @@ jobs:
         shell: bash
         run: |
           cd /tmp
-          wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/56f7923a-adb8-43f3-8b02-2b60fcac8cab/intel-deep-learning-essentials-2025.3.3.16_offline.sh -O intel-deep-learning-essentials_offline.sh
+          wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/8170208e-86db-4faa-a0d6-1ecf62699574/intel-deep-learning-essentials-2026.0.0.624_offline.sh -O intel-deep-learning-essentials_offline.sh
           sudo bash intel-deep-learning-essentials_offline.sh -s -a --silent --eula accept
 
       - name: Install Level Zero SDK

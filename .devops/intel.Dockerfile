@@ -1,4 +1,4 @@
-ARG ONEAPI_VERSION=2025.3.3-0-devel-ubuntu24.04
+ARG ONEAPI_VERSION=2026.0.0-devel-ubuntu24.04
 ARG BUILD_DATE=N/A
 ARG APP_VERSION=N/A
 ARG APP_REVISION=N/A
@@ -24,8 +24,15 @@ FROM docker.io/intel/deep-learning-essentials:$ONEAPI_VERSION AS build
 ARG GGML_SYCL_F16=ON
 ARG LEVEL_ZERO_VERSION=1.28.2
 ARG LEVEL_ZERO_UBUNTU_VERSION=u24.04
+# oneAPI 2026 removed both oneDNN and ocloc from the DLE base image. intel-oneapi-dnnl-devel
+# restores the SYCL backend's oneDNN GEMM path (see runtime LD_LIBRARY_PATH note below);
+# intel-ocloc restores the offline compiler icpx invokes for AOT (-DGGML_SYCL_DEVICE_ARCH=...),
+# without which AOT builds fail with "ocloc tool could not be found". NOTE: this image builds JIT
+# (spir64) by default — do NOT enable AOT -DGGML_SYCL_DEVICE_ARCH=bmg_g21 with the 2026.0 toolkit:
+# its offline ocloc codegen miscompiles the Battlemage attention kernels (non-deterministic
+# incoherent output); the runtime IGC used by the default JIT build is correct.
 RUN apt-get update && \
-    apt-get install -y git libssl-dev wget ca-certificates && \
+    apt-get install -y git libssl-dev wget ca-certificates intel-oneapi-dnnl-devel intel-ocloc && \
     cd /tmp && \
     wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/level-zero_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O level-zero.deb && \
     wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/level-zero-devel_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O level-zero-devel.deb && \
@@ -44,7 +51,7 @@ RUN if [ "${GGML_SYCL_F16}" = "ON" ]; then \
         && export SYCL_PROGRAM_COMPILE_OPTIONS="-cl-fp32-correctly-rounded-divide-sqrt"; \
     fi && \
     echo "Building with dynamic libs" && \
-    cmake -B build -DGGML_NATIVE=OFF -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DLLAMA_BUILD_TESTS=OFF ${OPT_SYCL_F16} && \
+    cmake -B build -DGGML_NATIVE=OFF -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DLLAMA_BUILD_TESTS=OFF -DDNNL_DIR=/opt/intel/oneapi/dnnl/latest/lib/cmake/dnnl ${OPT_SYCL_F16} && \
     cmake --build build --config Release -j$(nproc)
 
 RUN mkdir -p /app/lib && \
@@ -102,12 +109,17 @@ RUN mkdir /tmp/neo/ && cd /tmp/neo/ \
   && dpkg --install *.deb
 
 RUN apt-get update \
-    && apt-get install -y libgomp1 curl ffmpeg \
+    && apt-get install -y libgomp1 curl ffmpeg intel-oneapi-dnnl-devel \
     && apt autoremove -y \
     && apt clean -y \
     && rm -rf /tmp/* /var/tmp/* \
     && find /var/cache/apt/archives /var/lib/apt/lists -not -name lock -type f -delete \
     && find /var/cache -type f -delete
+
+# oneAPI 2026 removed oneDNN from the DLE base image; we reinstall it above (the build stage
+# links against it via -DDNNL_DIR). Put its lib dir on the runtime loader path so the SYCL
+# backend's libdnnl.so dependency resolves at runtime without copying the lib into /app.
+ENV LD_LIBRARY_PATH="/opt/intel/oneapi/dnnl/latest/lib:${LD_LIBRARY_PATH}"
 
 ### Full
 FROM base AS full
